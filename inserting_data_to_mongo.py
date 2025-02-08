@@ -13,13 +13,16 @@ logging.basicConfig(level=logging.INFO)
 def get_data_from_json(json_file: Path):
     """getting data from json file
     and transmit to processing"""
-    with open(json_file, "r", encoding="utf8") as file:
-        try:
+    Path(json_file).parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with open(json_file, "r", encoding="utf8") as file:
             data = json.load(file)
             name = json_file.stem
             json_data_processing(name, data)
-        except FileNotFoundError as err:
-            logging.error(f"Error with opening file {json_file}, file not found: {err}")
+    except FileNotFoundError as err:
+        raise FileNotFoundError(f"Error with opening file {json_file}, file not found: {err}")
+
 
 
 def json_data_processing(file_name: str, data_from_json: dict):

@@ -1,12 +1,18 @@
 import asyncio
 import logging
 import json
+from pathlib import Path
 from time import time
+import asyncio
 
 from aiohttp import ClientSession, ClientConnectorError
 from bs4 import BeautifulSoup
 
 logging.basicConfig(level=logging.INFO)
+
+
+class PathError(Exception):
+    pass
 
 
 async def fetch_page(session: ClientSession, url: str) -> str:
@@ -32,7 +38,8 @@ async def parse_quotes(page: str) -> list:
         text = quote.find("span", class_="text").text.strip()
         author = quote.find("small", class_="author").text.strip()
         tags = [tag.text.strip() for tag in quote.find_all("a", class_="tag")]
-        quotes.append({"text": text, "author": author, "tags": tags})
+        quotes.append({"quote": text, "author": author, "tags": tags})
+        logging.info(f"parsed quote by {author}")
     return quotes
 
 
@@ -43,12 +50,15 @@ async def parse_author(session: ClientSession, author_url: str) -> dict:
     if page:
         soup = BeautifulSoup(page, 'lxml')
         author_details = soup.find("div", class_="author-details")
-        return {
+
+        author_biography = {
             "fullname": author_details.find("h3", class_="author-title").text.strip(),
             "born_date": author_details.find("span", class_="author-born-date").text.strip(),
             "born_location": author_details.find("span", class_="author-born-location").text.strip(),
             "description": author_details.find("div", class_="author-description").text.strip()
         }
+        logging.info(f"fetched biography of {author_biography["fullname"]}")
+        return author_biography
 
 
 async def scrape_quotes_and_authors():
@@ -75,21 +85,20 @@ async def scrape_quotes_and_authors():
         authors_data = await asyncio.gather(*author_tasks)
         authors = [author for author in authors_data if author]
 
-    save_to_json("quotes.json", quotes)
-    save_to_json("authors.json", authors)
+    save_to_json("data_to_database/quotes.json", quotes)
+    save_to_json("data_to_database/authors.json", authors)
+    logging.info("all data successfully scraped and saved to database")
 
 
 def save_to_json(filename: str, data: list):
     """saving to json file in correct format for uploading to mongoDB"""
-    with open(filename, "w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+    try:
+        Path(filename).parent.mkdir(parents=True, exist_ok=True)
+        with open(filename, "w", encoding="utf-8") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
+    except PathError:
+        raise PathError(f"Could not create a file in path: {filename}")
 
 
 async def main():
     await scrape_quotes_and_authors()
-
-
-if __name__ == "__main__":
-    authors_time = time()
-    asyncio.run(main())
-    logging.info(f"time of getting all scraps is {(round(time() - authors_time), 2)}")
